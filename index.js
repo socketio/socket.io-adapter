@@ -83,6 +83,21 @@ Adapter.prototype.delAll = function(id, fn){
   delete this.sids[id];
 };
 
+
+/**
+ * Get all clients in room.
+ *
+ * @param {String} room id
+ * @api public
+ */
+Adapter.prototype.clients = function(room, fn){
+  if(!fn){
+    return;
+  }
+  process.nextTick(fn.bind(null, null, Object.keys(this.rooms[room] || [])));
+};
+
+
 /**
  * Broadcasts a packet.
  *
