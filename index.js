@@ -91,10 +91,23 @@ Adapter.prototype.delAll = function(id, fn){
  * @api public
  */
 Adapter.prototype.clients = function(room, fn){
+  // One argument
   if(!fn){
-    return;
+    if(typeof(room) !== 'function'){
+      return;
+    }
+    fn = room;
+    room = null;
   }
-  process.nextTick(fn.bind(null, null, Object.keys(this.rooms[room] || [])));
+
+  var result;
+  if(room === null){
+    result = Object.keys(this.sids || []);
+  }
+  else{
+    result = Object.keys(this.rooms[room] || []);
+  }
+  process.nextTick(fn.bind(null, null, result));
 };
 
 
