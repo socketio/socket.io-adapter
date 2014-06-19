@@ -30,7 +30,7 @@ function Adapter(nsp){
  * Inherits from `EventEmitter`.
  */
 
-Adapter.prototype.__proto__ = Emitter.prototype;
+Adapter.prototype = Object.create(Emitter.prototype);
 
 /**
  * Adds a socket from a room.
