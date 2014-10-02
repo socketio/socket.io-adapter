@@ -78,7 +78,7 @@ Adapter.prototype.del = function(id, room, fn){
  * @api public
  */
 
-Adapter.prototype.delAll = function(id, fn){
+Adapter.prototype.delAll = function(id){
   var rooms = this.sids[id];
   if (rooms) {
     for (var room in rooms) {
