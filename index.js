@@ -95,6 +95,20 @@ Adapter.prototype.delAll = function(id, fn){
 };
 
 /**
+ * Lists the id of each socket in a room.
+ *
+ * @param {String} room name
+ * @param {Function} callback
+ * @api public
+ */
+
+Adapter.prototype.list = function(room, fn){
+  var r = Object.keys(this.rooms[room] || {});
+
+  if (fn) process.nextTick(fn.bind(null, null, r));
+};
+
+/**
  * Broadcasts a packet.
  *
  * Options:
