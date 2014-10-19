@@ -117,9 +117,9 @@ Adapter.prototype.broadcast = function(packet, opts){
   packet.nsp = this.nsp.name;
   this.encoder.encode(packet, function(encodedPackets) {
     if (rooms.length) {
+      var room;
       for (var i = 0; i < rooms.length; i++) {
-        var room = self.rooms[rooms[i]];
-        if (!room) continue;
+        if (!(room = self.rooms[rooms[i]])) continue;
         for (var id in room) {
           if (room.hasOwnProperty(id)) {
             if (ids[id] || ~except.indexOf(id)) continue;
