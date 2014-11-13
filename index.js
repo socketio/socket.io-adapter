@@ -35,9 +35,9 @@ Adapter.prototype.__proto__ = Emitter.prototype;
 /**
  * Adds a socket from a room.
  *
- * @param {String} socket id
+ * @param {String} id  Socket's ID
  * @param {String} room name
- * @param {Function} callback
+ * @param {Function} [fn]
  * @api public
  */
 
@@ -52,9 +52,9 @@ Adapter.prototype.add = function(id, room, fn){
 /**
  * Removes a socket from a room.
  *
- * @param {String} socket id
+ * @param {String} id  Socket's ID
  * @param {String} room name
- * @param {Function} callback
+ * @param {Function} [fn]
  * @api public
  */
 
@@ -73,7 +73,8 @@ Adapter.prototype.del = function(id, room, fn){
 /**
  * Removes a socket from all rooms it's joined.
  *
- * @param {String} socket id
+ * @param {String} id  Socket's ID
+ * @param {Function} [fn]
  * @api public
  */
 
@@ -91,6 +92,8 @@ Adapter.prototype.delAll = function(id, fn){
     }
   }
   delete this.sids[id];
+
+  if (fn) process.nextTick(fn.bind(null, null));
 };
 
 /**
