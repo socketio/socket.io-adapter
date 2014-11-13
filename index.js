@@ -92,6 +92,8 @@ Adapter.prototype.delAll = function(id, fn){
     }
   }
   delete this.sids[id];
+
+  if (fn) process.nextTick(fn.bind(null, null));
 };
 
 /**
