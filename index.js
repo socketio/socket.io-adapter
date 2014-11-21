@@ -117,21 +117,7 @@ Adapter.prototype.clients = function(room, fn){
  * @api public
  */
 Adapter.prototype.roomClients = function(id, fn){
-  // One argument
-  if(!fn){
-    if(typeof(id) !== 'function'){
-      return;
-    }
-    fn = id;
-    id = null;
-  }
-  var result;
-  if(id === null){
-    result = Object.keys(this.rooms || []);
-  }
-  else{
-    result = Object.keys(this.sids[id] || []);
-  }
+  var result = Object.keys(this.sids[id] || []);
   process.nextTick(fn.bind(null, null, result));
 };
 
