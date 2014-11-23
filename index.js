@@ -110,6 +110,16 @@ Adapter.prototype.clients = function(room, fn){
   process.nextTick(fn.bind(null, null, result));
 };
 
+/**
+ * Get all rooms the client is in.
+ *
+ * @param {String} client id
+ * @api public
+ */
+Adapter.prototype.roomClients = function(id, fn){
+  var result = Object.keys(this.sids[id] || []);
+  process.nextTick(fn.bind(null, null, result));
+};
 
 /**
  * Broadcasts a packet.
