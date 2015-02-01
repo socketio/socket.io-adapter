@@ -13,6 +13,12 @@ var parser = require('socket.io-parser');
 module.exports = Adapter;
 
 /**
+ * `EventEmitter#emit` reference.
+ */
+
+var emit = Emitter.prototype.emit;
+
+/**
  * Memory adapter constructor.
  *
  * @param {Namespace} nsp
@@ -92,7 +98,7 @@ Adapter.prototype.delAll = function(id, fn){
     }
   }
   delete this.sids[id];
-  
+
   if (fn) process.nextTick(fn.bind(null, null));
 };
 
@@ -190,4 +196,50 @@ Adapter.prototype.clients = function(rooms, fn){
   }
 
   if (fn) process.nextTick(fn.bind(null, null, sids));
+};
+
+/**
+ * Broadcasts a packet to server sockets.
+ *
+ * Options:
+ *  - `except` {Array} sids that should be excluded
+ *  - `rooms` {Array} list of rooms to broadcast to
+ *
+ * @param {Array} the arguments for the emission
+ * @api public
+ */
+
+Adapter.prototype.intercom = function(args, opts){
+  var rooms = opts.rooms || [];
+  var except = opts.except || [];
+  var ids = {};
+  var self = this;
+  var socket;
+
+  process.nextTick(function(){
+    if (rooms.length) {
+      for (var i = 0; i < rooms.length; i++) {
+        var room = self.rooms[rooms[i]];
+        if (!room) continue;
+        for (var id in room) {
+          if (room.hasOwnProperty(id)) {
+            if (ids[id] || ~except.indexOf(id)) continue;
+            socket = self.nsp.connected[id];
+            if (socket) {
+              emit.apply(socket, args);
+              ids[id] = true;
+            }
+          }
+        }
+      }
+    } else {
+      for (var id in self.sids) {
+        if (self.sids.hasOwnProperty(id)) {
+          if (~except.indexOf(id)) continue;
+          socket = self.nsp.connected[id];
+          if (socket) emit.apply(socket, args);
+        }
+      }
+    }
+  });
 };
