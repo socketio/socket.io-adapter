@@ -3,7 +3,6 @@
  * Module dependencies.
  */
 
-var keys = require('object-keys');
 var Emitter = require('events').EventEmitter;
 var parser = require('socket.io-parser');
 
