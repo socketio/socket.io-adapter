@@ -57,7 +57,9 @@ Adapter.prototype.add = function(id, room, fn){
 
 function isEmpty(obj) {
   for (var key in obj) {
-    return false;
+    if (obj.hasOwnProperty(key)) {
+      return false;
+    }
   }
   return true;
 }
