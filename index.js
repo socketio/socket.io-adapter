@@ -101,16 +101,16 @@ Adapter.prototype.delAll = function(id, fn){
  *
  * Options:
  *  - `flags` {Object} flags for this packet
- *  - `except` {Array} sids that should be excluded
- *  - `rooms` {Array} list of rooms to broadcast to
+ *  - `except` {Object} sids that should be excluded
+ *  - `rooms` {Object} list of rooms to broadcast to
  *
  * @param {Object} packet object
  * @api public
  */
 
 Adapter.prototype.broadcast = function(packet, opts){
-  var rooms = opts.rooms || [];
-  var except = opts.except || [];
+  var rooms = opts.rooms || {};
+  var except = opts.except || {};
   var flags = opts.flags || {};
   var packetOpts = {
     preEncoded: true,
@@ -123,13 +123,13 @@ Adapter.prototype.broadcast = function(packet, opts){
 
   packet.nsp = this.nsp.name;
   this.encoder.encode(packet, function(encodedPackets) {
-    if (rooms.length) {
-      for (var i = 0; i < rooms.length; i++) {
-        var room = self.rooms[rooms[i]];
+    if (Object.keys(rooms).length) {
+      for (var name in rooms) {
+        var room = self.rooms[rooms[name]];
         if (!room) continue;
         for (var id in room) {
           if (room.hasOwnProperty(id)) {
-            if (ids[id] || ~except.indexOf(id)) continue;
+            if (ids[id] || except[id]) continue;
             socket = self.nsp.connected[id];
             if (socket) {
               socket.packet(encodedPackets, packetOpts);
@@ -141,7 +141,7 @@ Adapter.prototype.broadcast = function(packet, opts){
     } else {
       for (var id in self.sids) {
         if (self.sids.hasOwnProperty(id)) {
-          if (~except.indexOf(id)) continue;
+          if (except[id]) continue;
           socket = self.nsp.connected[id];
           if (socket) socket.packet(encodedPackets, packetOpts);
         }
@@ -153,7 +153,7 @@ Adapter.prototype.broadcast = function(packet, opts){
 /**
  * Gets a list of clients by sid.
  *
- * @param {Array} explicit set of rooms to check.
+ * @param {Object} explicit set of rooms to check.
  * @api public
  */
 
@@ -163,16 +163,16 @@ Adapter.prototype.clients = function(rooms, fn){
     rooms = null;
   }
 
-  rooms = rooms || [];
+  rooms = rooms || {};
 
   var ids = {};
   var self = this;
   var sids = [];
   var socket;
 
-  if (rooms.length) {
-    for (var i = 0; i < rooms.length; i++) {
-      var room = self.rooms[rooms[i]];
+  if (Object.keys(rooms).length) {
+    for (var name in rooms) {
+      var room = self.rooms[rooms[name]];
       if (!room) continue;
       for (var id in room) {
         if (room.hasOwnProperty(id)) {
