@@ -30,7 +30,7 @@ function Adapter(nsp){
  * Inherits from `EventEmitter`.
  */
 
-Adapter.prototype.__proto__ = Emitter.prototype;
+Adapter.prototype = Object.create(Emitter.prototype);
 
 /**
  * Adds a socket to a room.
@@ -94,6 +94,44 @@ Adapter.prototype.delAll = function(id, fn){
   delete this.sids[id];
   
   if (fn) process.nextTick(fn.bind(null, null));
+};
+
+
+/**
+ * Get all clients in room.
+ *
+ * @param {String} room id
+ * @api public
+ */
+Adapter.prototype.clients = function(room, fn){
+  // One argument
+  if(!fn){
+    if(typeof(room) !== 'function'){
+      return;
+    }
+    fn = room;
+    room = null;
+  }
+
+  var result;
+  if(room === null){
+    result = Object.keys(this.sids || []);
+  }
+  else{
+    result = Object.keys(this.rooms[room] || []);
+  }
+  process.nextTick(fn.bind(null, null, result));
+};
+
+/**
+ * Get all rooms the client is in.
+ *
+ * @param {String} client id
+ * @api public
+ */
+Adapter.prototype.roomClients = function(id, fn){
+  var result = Object.keys(this.sids[id] || []);
+  process.nextTick(fn.bind(null, null, result));
 };
 
 /**
