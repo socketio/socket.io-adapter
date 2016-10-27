@@ -177,7 +177,11 @@ Adapter.prototype.clients = function(rooms, fn){
           if (ids[id]) continue;
           socket = self.nsp.connected[id];
           if (socket) {
-            sids.push(id);
+            var tmp = { socketId: id };
+            if (typeof socket.decoded_token !== "undefined" && socket.decoded_token !== null) {
+              tmp.userId = socket.decoded_token._id
+            };
+            sids.push(tmp);
             ids[id] = true;
           }
         }
@@ -187,7 +191,13 @@ Adapter.prototype.clients = function(rooms, fn){
     for (var id in self.sids) {
       if (self.sids.hasOwnProperty(id)) {
         socket = self.nsp.connected[id];
-        if (socket) sids.push(id);
+        if (socket) {
+          var tmp = { socketId: id };
+          if (typeof socket.decoded_token !== "undefined" && socket.decoded_token !== null) {
+            tmp.userId = socket.decoded_token._id
+          };
+          sids.push(tmp);
+        }
       }
     }
   }
