@@ -77,7 +77,7 @@ Adapter.prototype.del = function(id, room, fn){
  * @api public
  */
 
-Adapter.prototype.delAll = function(id, fn){
+Adapter.prototype.delAll = function(id){
   var rooms = this.sids[id];
   if (rooms) {
     for (var room in rooms) {
@@ -90,6 +90,20 @@ Adapter.prototype.delAll = function(id, fn){
   delete this.sids[id];
 
   if (fn) process.nextTick(fn.bind(null, null));
+};
+
+/**
+ * Lists the id of each socket in a room.
+ *
+ * @param {String} room name
+ * @param {Function} callback
+ * @api public
+ */
+
+Adapter.prototype.list = function(room, fn){
+  var r = Object.keys(this.rooms[room] || {});
+
+  if (fn) process.nextTick(fn.bind(null, null, r));
 };
 
 /**
