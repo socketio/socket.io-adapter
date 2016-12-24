@@ -125,13 +125,11 @@ Adapter.prototype.broadcast = function(packet, opts){
         if (!room) continue;
         var sockets = room.sockets;
         for (var id in sockets) {
-          if (sockets[id]) {
-            if (ids[id] || ~except.indexOf(id)) continue;
-            socket = self.nsp.connected[id];
-            if (socket) {
-              socket.packet(encodedPackets, packetOpts);
-              ids[id] = true;
-            }
+          if (ids[id] || ~except.indexOf(id)) continue;
+          socket = self.nsp.connected[id];
+          if (socket) {
+            socket.packet(encodedPackets, packetOpts);
+            ids[id] = true;
           }
         }
       }
@@ -172,13 +170,11 @@ Adapter.prototype.clients = function(rooms, fn){
       if (!room) continue;
       var sockets = room.sockets;
       for (var id in sockets) {
-        if (sockets[id]) {
-          if (ids[id]) continue;
-          socket = self.nsp.connected[id];
-          if (socket) {
-            sids.push(id);
-            ids[id] = true;
-          }
+        if (ids[id]) continue;
+        socket = self.nsp.connected[id];
+        if (socket) {
+          sids.push(id);
+          ids[id] = true;
         }
       }
     }
