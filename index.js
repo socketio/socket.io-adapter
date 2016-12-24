@@ -21,8 +21,8 @@ module.exports = Adapter;
 
 function Adapter(nsp){
   this.nsp = nsp;
-  this.rooms = {};
-  this.sids = {};
+  this.rooms = Object.create(null);
+  this.sids = Object.create(null);
   this.encoder = new parser.Encoder();
 }
 
@@ -61,7 +61,7 @@ Adapter.prototype.add = function(id, room, fn){
 Adapter.prototype.del = function(id, room, fn){
   this.sids[id] = this.sids[id] || {};
   delete this.sids[id][room];
-  if (this.rooms.hasOwnProperty(room)) {
+  if (this.rooms[room]) {
     this.rooms[room].del(id);
     if (this.rooms[room].length === 0) delete this.rooms[room];
   }
@@ -81,7 +81,7 @@ Adapter.prototype.delAll = function(id, fn){
   var rooms = this.sids[id];
   if (rooms) {
     for (var room in rooms) {
-      if (this.rooms.hasOwnProperty(room)) {
+      if (this.rooms[room]) {
         this.rooms[room].del(id);
         if (this.rooms[room].length === 0) delete this.rooms[room];
       }
@@ -125,7 +125,7 @@ Adapter.prototype.broadcast = function(packet, opts){
         if (!room) continue;
         var sockets = room.sockets;
         for (var id in sockets) {
-          if (sockets.hasOwnProperty(id)) {
+          if (sockets[id]) {
             if (ids[id] || ~except.indexOf(id)) continue;
             socket = self.nsp.connected[id];
             if (socket) {
@@ -137,11 +137,9 @@ Adapter.prototype.broadcast = function(packet, opts){
       }
     } else {
       for (var id in self.sids) {
-        if (self.sids.hasOwnProperty(id)) {
-          if (~except.indexOf(id)) continue;
-          socket = self.nsp.connected[id];
-          if (socket) socket.packet(encodedPackets, packetOpts);
-        }
+        if (~except.indexOf(id)) continue;
+        socket = self.nsp.connected[id];
+        if (socket) socket.packet(encodedPackets, packetOpts);
       }
     }
   });
@@ -174,7 +172,7 @@ Adapter.prototype.clients = function(rooms, fn){
       if (!room) continue;
       var sockets = room.sockets;
       for (var id in sockets) {
-        if (sockets.hasOwnProperty(id)) {
+        if (sockets[id]) {
           if (ids[id]) continue;
           socket = self.nsp.connected[id];
           if (socket) {
@@ -186,10 +184,8 @@ Adapter.prototype.clients = function(rooms, fn){
     }
   } else {
     for (var id in self.sids) {
-      if (self.sids.hasOwnProperty(id)) {
         socket = self.nsp.connected[id];
         if (socket) sids.push(id);
-      }
     }
   }
 
@@ -216,7 +212,7 @@ Adapter.prototype.clientRooms = function(id, fn){
 
 function Room(){
   if (!(this instanceof Room)) return new Room();
-  this.sockets = {};
+  this.sockets = Object.create(null);
   this.length = 0;
 }
 
@@ -228,7 +224,7 @@ function Room(){
  */
 
 Room.prototype.add = function(id){
-  if (!this.sockets.hasOwnProperty(id)) {
+  if (!this.sockets[id]) {
     this.sockets[id] = true;
     this.length++;
   }
@@ -242,7 +238,7 @@ Room.prototype.add = function(id){
  */
 
 Room.prototype.del = function(id){
-  if (this.sockets.hasOwnProperty(id)) {
+  if (this.sockets[id]) {
     delete this.sockets[id];
     this.length--;
   }
