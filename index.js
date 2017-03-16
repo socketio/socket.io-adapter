@@ -58,7 +58,10 @@ Adapter.prototype.addAll = function(id, rooms, fn){
     var room = rooms[i];
     this.sids[id] = this.sids[id] || {};
     this.sids[id][room] = true;
-    this.rooms[room] = this.rooms[room] || Room();
+    if (!this.rooms.hasOwnProperty(room)) {
+      this.rooms[room] = Room();
+      this.emit('create-room', room);
+    }
     this.rooms[room].add(id);
   }
   if (fn) process.nextTick(fn.bind(null, null));
@@ -78,8 +81,13 @@ Adapter.prototype.del = function(id, room, fn){
   delete this.sids[id][room];
   if (this.rooms.hasOwnProperty(room)) {
     this.rooms[room].del(id);
-    if (this.rooms[room].length === 0) delete this.rooms[room];
+    if (this.rooms[room].length === 0) {
+      delete this.rooms[room];
+      this.emit('delete-room', room);
+    }
   }
+  
+  if (this.sids[id].length == 0) delete this.sids[id];
 
   if (fn) process.nextTick(fn.bind(null, null));
 };
@@ -96,13 +104,9 @@ Adapter.prototype.delAll = function(id, fn){
   var rooms = this.sids[id];
   if (rooms) {
     for (var room in rooms) {
-      if (this.rooms.hasOwnProperty(room)) {
-        this.rooms[room].del(id);
-        if (this.rooms[room].length === 0) delete this.rooms[room];
-      }
+      this.del(id, room);
     }
   }
-  delete this.sids[id];
 
   if (fn) process.nextTick(fn.bind(null, null));
 };
