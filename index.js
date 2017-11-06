@@ -165,15 +165,23 @@ Adapter.prototype.broadcast = function(packet, opts){
 /**
  * Gets a list of clients by sid.
  *
- * @param {Array} explicit set of rooms to check.
+ * @param {Object} options
  * @param {Function} callback
  * @api public
  */
 
-Adapter.prototype.clients = function(rooms, fn){
-  if ('function' == typeof rooms){
-    fn = rooms;
-    rooms = null;
+Adapter.prototype.clients = function(opts, fn){
+  if ('function' == typeof opts) {
+    fn = opts;
+    opts = null;
+  }
+
+  var flags = {};
+  var rooms = opts;
+
+  if (opts && typeof opts === 'object' && opts.hasOwnProperty('rooms')) {
+    flags = opts.flags || {};
+    rooms = opts.rooms || [];
   }
 
   rooms = rooms || [];
