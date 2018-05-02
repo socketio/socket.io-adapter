@@ -125,6 +125,7 @@ Adapter.prototype.broadcast = function(packet, opts){
   var flags = opts.flags || {};
   var packetOpts = {
     preEncoded: true,
+    loopback: flags.loopback,
     volatile: flags.volatile,
     compress: flags.compress
   };
