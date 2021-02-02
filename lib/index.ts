@@ -138,6 +138,20 @@ export class Adapter extends EventEmitter {
     packet.nsp = this.nsp.name;
     const encodedPackets = this.encoder.encode(packet);
 
+    // Allow ids in `except` to be room ids.
+    if (except.size > 0) {
+      const exclude = except;
+      except = new Set(except);
+      for (const id of exclude) {
+        if (!this.rooms.has(id)) continue;
+        for (const sid of this.rooms.get(id)) {
+          if (sid !== id) {
+            except.add(sid);
+          }
+        }
+      }
+    }
+
     if (rooms.size) {
       for (const room of rooms) {
         if (!this.rooms.has(room)) continue;
@@ -152,20 +166,6 @@ export class Adapter extends EventEmitter {
         }
       }
     } else {
-      // Allow ids in `except` to be room ids.
-      if (except.size > 0) {
-        const exclude = except;
-        except = new Set(except);
-        for (const id of exclude) {
-          if (!this.rooms.has(id)) continue;
-          for (const sid of this.rooms.get(id)) {
-            if (sid !== id) {
-              except.add(sid);
-            }
-          }
-        }
-      }
-
       for (const [id] of this.sids) {
         if (except.has(id)) continue;
         const socket = this.nsp.sockets.get(id);
