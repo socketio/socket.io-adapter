@@ -134,9 +134,9 @@ export class Adapter extends EventEmitter {
 
     packet.nsp = this.nsp.name;
     const encodedPackets = this.encoder.encode(packet);
-
+    const isString = typeof encodedPackets[0] == "string";
     const firstPacketOpts = {
-      wsPreEncoded: "4" + encodedPackets[0], // "4" being the "message" packet type in Engine.IO
+      wsPreEncoded: isString ? "4" + encodedPackets[0] : encodedPackets[0], // "4" being the "message" packet type in Engine.IO
       ...packetOpts
     };
 
