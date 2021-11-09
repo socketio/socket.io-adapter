@@ -133,6 +133,8 @@ export class Adapter extends EventEmitter {
     };
 
     packet.nsp = this.nsp.name;
+    this.emit("broadcast-packet", packet, basePacketOpts);
+
     const encodedPackets = this.encoder.encode(packet);
 
     const packetOpts = encodedPackets.map(encodedPacket => {
@@ -147,6 +149,7 @@ export class Adapter extends EventEmitter {
     });
 
     this.apply(opts, socket => {
+      this.emit("send-socket-packet", socket, packet);
       for (let i = 0; i < encodedPackets.length; i++) {
         socket.client.writeToEngine(encodedPackets[i], packetOpts[i]);
       }

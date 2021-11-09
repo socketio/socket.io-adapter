@@ -230,6 +230,68 @@ describe("socket.io-adapter", () => {
       adapter.del("s1", "r1");
     });
 
+    it("should emit a 'broadcast-packet' event with broadcast method", done => {
+      const nsp = {
+        server: {
+          encoder: {
+            encode() {
+              return [Buffer.from([1, 2, 3])];
+            }
+          }
+        },
+        sockets: new Map()
+      };
+      const packet = [];
+      const adapter = new Adapter(nsp);
+      adapter.on("broadcast-packet", (p, o) => {
+        expect(p).to.equal(packet);
+        expect(o).to.eql({
+          preEncoded: true,
+          volatile: undefined,
+          compress: undefined
+        });
+        done();
+      });
+      adapter.broadcast(packet, { rooms: new Set() });
+    });
+
+    it("should emit a 'send-socket-packet' event with broadcast method", done => {
+      const doneCb = ((c = 2, i = 0) => () => ++i === c && done())();
+      function socket(id) {
+        return [
+          id,
+          {
+            id,
+            client: {
+              writeToEngine(payload, opts) {
+                expect(payload).to.be.a(Buffer);
+              }
+            }
+          }
+        ];
+      }
+      const nsp = {
+        server: {
+          encoder: {
+            encode() {
+              return [Buffer.from([1, 2, 3])];
+            }
+          }
+        },
+        sockets: new Map([socket("s1"), socket("s2")])
+      };
+      const packet = [];
+      const adapter = new Adapter(nsp);
+      adapter.on("send-socket-packet", (s, p) => {
+        expect(nsp.sockets.get(s.id)).to.equal(s);
+        expect(p).to.eql(packet);
+        doneCb();
+      });
+      adapter.addAll("s1", new Set());
+      adapter.addAll("s2", new Set());
+      adapter.broadcast(packet, { rooms: new Set() });
+    });
+
     it("should not throw when calling del twice", done => {
       const adapter = new Adapter({ server: { encoder: null } });
       adapter.on("leave-room", (room, sid) => {
