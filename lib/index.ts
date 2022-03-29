@@ -54,16 +54,33 @@ export class Adapter extends EventEmitter {
       this.sids.set(id, new Set());
     }
 
+    const roomToPendingEvents = new Map<
+      Room,
+      { createdRoom: boolean; joinedRoom: boolean }
+    >();
+
     for (const room of rooms) {
       this.sids.get(id).add(room);
 
+      const pendingEvents = { createdRoom: false, joinedRoom: false };
+      roomToPendingEvents.set(room, pendingEvents);
+
       if (!this.rooms.has(room)) {
         this.rooms.set(room, new Set());
-        this.emit("create-room", room);
+        pendingEvents.createdRoom = true;
       }
       if (!this.rooms.get(room).has(id)) {
         this.rooms.get(room).add(id);
-        this.emit("join-room", room, id);
+        pendingEvents.joinedRoom = true;
+      }
+
+      for (const [room, { createdRoom, joinedRoom }] of roomToPendingEvents) {
+        if (createdRoom) {
+          this.emit("create-room", room);
+        }
+        if (joinedRoom) {
+          this.emit("join-room", room, id);
+        }
       }
     }
   }
@@ -85,11 +102,16 @@ export class Adapter extends EventEmitter {
   private _del(room: Room, id: SocketId) {
     const _room = this.rooms.get(room);
     if (_room != null) {
-      const deleted = _room.delete(id);
-      if (deleted) {
+      const deletedSocketIdFromRoom = _room.delete(id);
+      let deletedRoom = false;
+      if (_room.size === 0 && this.rooms.delete(room)) {
+        deletedRoom = true;
+      }
+
+      if (deletedSocketIdFromRoom) {
         this.emit("leave-room", room, id);
       }
-      if (_room.size === 0 && this.rooms.delete(room)) {
+      if (deletedRoom) {
         this.emit("delete-room", room);
       }
     }
