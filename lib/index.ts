@@ -1,8 +1,32 @@
 import { EventEmitter } from "events";
 import { yeast } from "./contrib/yeast";
+import { Immutable } from "./contrib/immutable";
 import WebSocket = require("ws");
 
 const canPreComputeFrame = typeof WebSocket?.Sender?.frame === "function";
+
+enum PacketType {
+  CONNECT = 0,
+  DISCONNECT = 1,
+  EVENT = 2,
+  ACK = 3,
+  CONNECT_ERROR = 4,
+  BINARY_EVENT = 5,
+  BINARY_ACK = 6,
+}
+
+interface Packet {
+  data?: any;
+  id?: number;
+  nsp?: string;
+  type: PacketType;
+}
+
+type EventPacketData = [string, ...any]; // [eventName, ...args]
+
+interface EventPacket extends Omit<Packet, "data"> {
+  data: EventPacketData;
+}
 
 /**
  * A public ID, sent by the server at the beginning of the Socket.IO session and which can be used for private messaging
@@ -40,12 +64,25 @@ interface SessionToPersist {
   data: unknown;
 }
 
-export type Session = SessionToPersist & { missedPackets: unknown[][] };
+export type Session = SessionToPersist & { missedPackets: EventPacketData[] };
+
+function isEventPacket(packet: Packet): packet is EventPacket {
+  return packet.type === PacketType.EVENT;
+}
+
+interface EventBroadcastMiddleware<SD = unknown> {
+  (
+    socketData: SD,
+    prevData: Immutable<EventPacketData>,
+    next: (nextData: EventPacketData) => void
+  ): void;
+}
 
 export class Adapter extends EventEmitter {
   public rooms: Map<Room, Set<SocketId>> = new Map();
   public sids: Map<SocketId, Set<Room>> = new Map();
   private readonly encoder;
+  private readonly eventBroadcastMiddlewares: EventBroadcastMiddleware[] = [];
 
   /**
    * In-memory adapter constructor.
@@ -146,6 +183,106 @@ export class Adapter extends EventEmitter {
     this.sids.delete(id);
   }
 
+  public useEventBroadcast<SD = unknown>(
+    middleware: EventBroadcastMiddleware<SD>
+  ): void {
+    this.eventBroadcastMiddlewares.push(middleware);
+  }
+
+  public runEventBroadcastMiddlewares(
+    socketData: unknown,
+    packetData: EventPacketData,
+    next: (data: EventPacketData) => void
+  ): void {
+    const mws = this.eventBroadcastMiddlewares.slice(0);
+    if (mws.length) {
+      let prevData = packetData;
+      const run = () => {
+        mws.shift()(socketData, prevData, (nextData) => {
+          prevData = nextData;
+          if (mws.length) {
+            run();
+          } else {
+            next(prevData);
+          }
+        });
+      };
+      run();
+    } else {
+      next(packetData);
+    }
+  }
+
+  private doBroadcast(
+    packet: Packet,
+    opts: BroadcastOptions,
+    onSocket: (socket) => void
+  ): void {
+    const flags = opts.flags || {};
+    const packetOpts = {
+      preEncoded: true,
+      volatile: flags.volatile,
+      compress: flags.compress,
+    };
+
+    packet.nsp = this.nsp.name;
+
+    const sendToSocket = (socket, pkt: Packet, encPackets, pktOpts) => {
+      onSocket(socket);
+
+      if (typeof socket.notifyOutgoingListeners === "function") {
+        socket.notifyOutgoingListeners(pkt);
+      }
+
+      socket.client.writeToEngine(encPackets, pktOpts);
+    };
+
+    const defaultPacketOpts = { ...packetOpts };
+    const defaultEncodedPackets = this._encode(packet, defaultPacketOpts);
+
+    if (isEventPacket(packet) && this.eventBroadcastMiddlewares.length) {
+      this.apply(opts, (socket) => {
+        this.runEventBroadcastMiddlewares(
+          socket.data,
+          packet.data,
+          (nextData) => {
+            //Re-encode if the packet data changed:
+            if (
+              packet.data !== nextData ||
+              packet.data.length !== nextData.length ||
+              packet.data.some((d, i) => d !== nextData[i])
+            ) {
+              const nextPacketOpts = { ...packetOpts };
+              const nextPacket = { ...packet, data: nextData };
+              const nextEncodedPackets = this._encode(
+                nextPacket,
+                nextPacketOpts
+              );
+              sendToSocket(
+                socket,
+                nextPacket,
+                nextEncodedPackets,
+                nextPacketOpts
+              );
+            } else {
+              //Otherwise use the pre-encoded packet for performance:
+              sendToSocket(
+                socket,
+                packet,
+                defaultEncodedPackets,
+                defaultPacketOpts
+              );
+            }
+          }
+        );
+      });
+    } else {
+      this.apply(opts, (socket) =>
+        sendToSocket(socket, packet, defaultEncodedPackets, defaultPacketOpts)
+      );
+    }
+  }
+
   /**
    * Broadcasts a packet.
    *
@@ -158,24 +295,8 @@ export class Adapter extends EventEmitter {
    * @param {Object} opts     the options
    * @public
    */
-  public broadcast(packet: any, opts: BroadcastOptions): void {
-    const flags = opts.flags || {};
-    const packetOpts = {
-      preEncoded: true,
-      volatile: flags.volatile,
-      compress: flags.compress,
-    };
-
-    packet.nsp = this.nsp.name;
-    const encodedPackets = this._encode(packet, packetOpts);
-
-    this.apply(opts, (socket) => {
-      if (typeof socket.notifyOutgoingListeners === "function") {
-        socket.notifyOutgoingListeners(packet);
-      }
-
-      socket.client.writeToEngine(encodedPackets, packetOpts);
-    });
+  public broadcast(packet: Packet, opts: BroadcastOptions): void {
+    this.doBroadcast(packet, opts, () => undefined);
   }
 
   /**
@@ -199,32 +320,16 @@ export class Adapter extends EventEmitter {
     clientCountCallback: (clientCount: number) => void,
     ack: (...args: any[]) => void
   ) {
-    const flags = opts.flags || {};
-    const packetOpts = {
-      preEncoded: true,
-      volatile: flags.volatile,
-      compress: flags.compress,
-    };
-
-    packet.nsp = this.nsp.name;
     // we can use the same id for each packet, since the _ids counter is common (no duplicate)
     packet.id = this.nsp._ids++;
 
-    const encodedPackets = this._encode(packet, packetOpts);
-
     let clientCount = 0;
 
-    this.apply(opts, (socket) => {
+    this.doBroadcast(packet, opts, (socket) => {
       // track the total number of acknowledgements that are expected
       clientCount++;
       // call the ack callback for each client response
       socket.acks.set(packet.id, ack);
-
-      if (typeof socket.notifyOutgoingListeners === "function") {
-        socket.notifyOutgoingListeners(packet);
-      }
-
-      socket.client.writeToEngine(encodedPackets, packetOpts);
     });
 
     clientCountCallback(clientCount);
@@ -398,7 +503,7 @@ export class Adapter extends EventEmitter {
 interface PersistedPacket {
   id: string;
   emittedAt: number;
-  data: unknown[];
+  data: EventPacketData;
   opts: BroadcastOptions;
 }
 
@@ -461,11 +566,17 @@ export class SessionAwareAdapter extends Adapter {
       // the offset may be too old
       return null;
     }
-    const missedPackets = [];
+    const missedPackets: EventPacketData[] = [];
     for (let i = index + 1; i < this.packets.length; i++) {
       const packet = this.packets[i];
       if (shouldIncludePacket(session.rooms, packet.opts)) {
-        missedPackets.push(packet.data);
+        this.runEventBroadcastMiddlewares(
+          session.data,
+          packet.data,
+          (nextData) => {
+            missedPackets.push(nextData);
+          }
+        );
       }
     }
     return Promise.resolve({
@@ -474,13 +585,12 @@ export class SessionAwareAdapter extends Adapter {
     });
   }
 
-  override broadcast(packet: any, opts: BroadcastOptions) {
-    const isEventPacket = packet.type === 2;
+  override broadcast(packet: Packet, opts: BroadcastOptions) {
     // packets with acknowledgement are not stored because the acknowledgement function cannot be serialized and
     // restored on another server upon reconnection
     const withoutAcknowledgement = packet.id === undefined;
     const notVolatile = opts.flags?.volatile === undefined;
-    if (isEventPacket && withoutAcknowledgement && notVolatile) {
+    if (isEventPacket(packet) && withoutAcknowledgement && notVolatile) {
       const id = yeast();
       // the offset is stored at the end of the data array, so the client knows the ID of the last packet it has
       // processed (and the format is backward-compatible)

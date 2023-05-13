@@ -91,10 +91,13 @@ describe("socket.io-adapter", () => {
     adapter.addAll("s2", new Set());
     adapter.addAll("s3", new Set(["r1"]));
 
-    adapter.broadcast([], {
-      rooms: new Set(),
-      except: new Set(["r1"]),
-    });
+    adapter.broadcast(
+      { type: 2 },
+      {
+        rooms: new Set(),
+        except: new Set(["r1"]),
+      }
+    );
     expect(ids).to.eql(["s2"]);
   });
 
@@ -133,10 +136,13 @@ describe("socket.io-adapter", () => {
     adapter.addAll("s2", new Set(["r2"]));
     adapter.addAll("s3", new Set(["r1"]));
 
-    adapter.broadcast([], {
-      rooms: new Set(["r1"]),
-      except: new Set(["r2"]),
-    });
+    adapter.broadcast(
+      { type: 2 },
+      {
+        rooms: new Set(["r1"]),
+        except: new Set(["r2"]),
+      }
+    );
     expect(ids).to.eql(["s3"]);
   });
 
@@ -176,10 +182,13 @@ describe("socket.io-adapter", () => {
     adapter.addAll("s2", new Set());
     adapter.addAll("s3", new Set());
 
-    adapter.broadcast([], {
-      rooms: new Set(),
-      except: new Set(),
-    });
+    adapter.broadcast(
+      { type: 2 },
+      {
+        rooms: new Set(),
+        except: new Set(),
+      }
+    );
   });
 
   describe("utility methods", () => {
