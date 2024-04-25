@@ -40,6 +40,23 @@ export interface ClusterAdapterOptions {
    * @default 10_000
    */
   heartbeatTimeout?: number;
+  /**
+   * The number of ms between eviction of dead nodes.
+   * @default 1_000
+   */
+  deadNodeEvictionInterval?: number;
+  /**
+   * The number of ms after initialization that we wait before
+   * performing any requests that depend on knowledge about cluster.
+   * @default 0
+   */
+  initializationDelay?: number;
+  /**
+   * Whether requests that didn't receive a response
+   * from all cluster nodes should be returned.
+   * @default false
+   */
+  eagerFetching?: boolean;
 }
 
 export enum MessageType {
@@ -735,12 +752,19 @@ export abstract class ClusterAdapterWithHeartbeat extends ClusterAdapter {
   private readonly cleanupTimer: NodeJS.Timeout | undefined;
   private customRequests: Map<string, CustomClusterRequest> = new Map();
 
+  private initializationPromise: Promise<void> | undefined;
+  private initialized = false;
+  private initializationTimeout: NodeJS.Timeout | undefined;
+
   protected constructor(nsp, opts: ClusterAdapterOptions) {
     super(nsp);
     this._opts = Object.assign(
       {
         heartbeatInterval: 5_000,
         heartbeatTimeout: 10_000,
+        deadNodeEvictionInterval: 1_000,
+        initializationDelay: 0,
+        eagerFetching: false,
       },
       opts
     );
@@ -748,15 +772,41 @@ export abstract class ClusterAdapterWithHeartbeat extends ClusterAdapter {
       const now = Date.now();
       this.nodesMap.forEach((lastSeen, uid) => {
         const nodeSeemsDown = now - lastSeen > this._opts.heartbeatTimeout;
+        const removedNodeIds: string[] = [];
         if (nodeSeemsDown) {
           debug("[%s] node %s seems down", this.uid, uid);
           this.removeNode(uid);
+          removedNodeIds.push(uid);
         }
+
+        removedNodeIds.forEach((removedNodeId) => {
+          for (const request of this.customRequests.values()) {
+            request.missingUids.delete(removedNodeId);
+          }
+        });
       });
-    }, 1_000);
+    }, this._opts.deadNodeEvictionInterval);
+
+    if (this._opts.initializationDelay > 0) {
+      this.initializationPromise = new Promise((resolve) => {
+        this.initializationTimeout = setTimeout(() => {
+          this.initialized = true;
+          this.initializationTimeout = undefined;
+          this.initializationPromise = undefined;
+          resolve();
+        }, this._opts.heartbeatInterval);
+      });
+    } else {
+      this.initialized = true;
+    }
   }
 
   override init() {
+    debug("initialize");
+    /**
+     * Broadcast to other nodes of cluster that we are alive.
+     * They send back HEARTBEAT responses.
+     */
     this.publish({
       type: MessageType.INITIAL_HEARTBEAT,
     });
@@ -781,6 +831,12 @@ export abstract class ClusterAdapterWithHeartbeat extends ClusterAdapter {
     clearTimeout(this.heartbeatTimer);
     if (this.cleanupTimer) {
       clearInterval(this.cleanupTimer);
+    }
+    if (this.initializationTimeout) {
+      clearTimeout(this.initializationTimeout);
+    }
+    for (const request of this.customRequests.values()) {
+      clearTimeout(request.timeout);
     }
   }
 
@@ -887,6 +943,12 @@ export abstract class ClusterAdapterWithHeartbeat extends ClusterAdapter {
   }
 
   override async fetchSockets(opts: BroadcastOptions): Promise<any[]> {
+    if (!this.initialized && this.initializationPromise) {
+      debug("Wait for initialization to finish.");
+      await this.initializationPromise;
+      debug("Initialization finished.");
+    }
+
     const [localSockets, serverCount] = await Promise.all([
       super.fetchSockets({
         rooms: opts.rooms,
@@ -908,6 +970,18 @@ export abstract class ClusterAdapterWithHeartbeat extends ClusterAdapter {
     return new Promise<any[]>((resolve, reject) => {
       const timeout = setTimeout(() => {
         const storedRequest = this.customRequests.get(requestId);
+        /**
+         * Emit on best effort basis.
+         */
+        if (this._opts.eagerFetching) {
+          debug(
+            `Emit eager result, missing ${storedRequest.missingUids.size} responses.`
+          );
+          storedRequest.resolve(storedRequest.responses);
+          this.customRequests.delete(requestId);
+          return;
+        }
+
         if (storedRequest) {
           reject(
             new Error(
